@@ -119,3 +119,79 @@ pre {
   font-size: 0.8rem;
   overflow-x: auto;
 }
+
+.batch-panel {
+  margin-top: 2rem;
+  background: #fff;
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(147, 197, 253, 0.4);
+}
+
+.batch-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.batch-header p {
+  margin: 0.5rem 0 1.5rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.batch-panel textarea {
+  width: 100%;
+  min-height: 160px;
+  border-radius: 14px;
+  border: 1px solid #d5dbe8;
+  padding: 1rem;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 0.95rem;
+  resize: vertical;
+}
+
+.batch-actions {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.batch-panel .hint {
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.batch-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.batch-results div {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  min-height: 120px;
+}
+
+.batch-results h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  color: #1f2937;
+}
+
+.batch-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.batch-results li + li {
+  margin-top: 0.35rem;
+}

