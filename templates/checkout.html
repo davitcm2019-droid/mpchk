@@ -277,84 +277,100 @@
       } else {
         mpInstance = new MercadoPago(publicKey, { locale: "pt-BR" });
 
-        const cardForm = mpInstance.cardForm({
-          amount: document.getElementById("amount").value || "1",
-          autoMount: true,
-          form: {
-            id: "checkoutForm",
-            cardholderName: {
-              id: "cardholderName",
-              placeholder: "Nome completo",
+        const cardFormKey = "__mpCheckoutForm";
+        const createCardForm = () => {
+          if (window[cardFormKey]) {
+            return window[cardFormKey];
+          }
+          const formInstance = mpInstance.cardForm({
+            amount: document.getElementById("amount").value || "1",
+            autoMount: true,
+            form: {
+              id: "checkoutForm",
+              cardholderName: {
+                id: "cardholderName",
+                placeholder: "Nome completo",
+              },
+              cardholderEmail: {
+                id: "cardholderEmail",
+                placeholder: "email@exemplo.com",
+              },
+              docType: {
+                id: "docType",
+                placeholder: "CPF",
+              },
+              docNumber: {
+                id: "docNumber",
+                placeholder: "00000000000",
+              },
+              cardNumber: {
+                id: "mp-card-number",
+              },
+              cardExpirationMonth: {
+                id: "mp-card-expiration-month",
+              },
+              cardExpirationYear: {
+                id: "mp-card-expiration-year",
+              },
+              securityCode: {
+                id: "mp-security-code",
+              },
+              installments: {
+                id: "installments",
+              },
+              transactionAmount: {
+                id: "amount",
+              },
             },
-            cardholderEmail: {
-              id: "cardholderEmail",
-              placeholder: "email@exemplo.com",
-            },
-            docType: {
-              id: "docType",
-              placeholder: "CPF",
-            },
-            docNumber: {
-              id: "docNumber",
-              placeholder: "00000000000",
-            },
-            cardNumber: {
-              id: "mp-card-number",
-            },
-            cardExpirationMonth: {
-              id: "mp-card-expiration-month",
-            },
-            cardExpirationYear: {
-              id: "mp-card-expiration-year",
-            },
-            securityCode: {
-              id: "mp-security-code",
-            },
-            installments: {
-              id: "installments",
-            },
-            transactionAmount: {
-              id: "amount",
-            },
-          },
-          callbacks: {
-            onSubmit: (event) => {
-              event.preventDefault();
-              const cardFormData = cardForm.getCardFormData();
-              const payload = {
-                ...cardFormData,
-                payer_email: cardFormData.cardholderEmail,
-                transaction_amount: Number(cardFormData.transactionAmount),
-              };
+            callbacks: {
+              onSubmit: (event) => {
+                event.preventDefault();
+                const cardFormData = formInstance.getCardFormData();
+                const payload = {
+                  ...cardFormData,
+                  payer_email: cardFormData.cardholderEmail,
+                  transaction_amount: Number(cardFormData.transactionAmount),
+                };
 
-              checkoutStatus.textContent = "Processando pagamento...";
+                checkoutStatus.textContent = "Processando pagamento...";
 
-              fetch("/api/payments", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-              })
-                .then((response) =>
-                  response.json().then((data) => ({ status: response.status, data }))
-                )
-                .then(({ status: code, data }) => {
-                  checkoutStatus.innerHTML = `
-                    <strong>Status ${code}</strong>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                  `;
+                fetch("/api/payments", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify(payload),
                 })
-                .catch((error) => {
-                  console.error("Erro ao chamar o backend:", error);
-                  checkoutStatus.textContent = "Erro inesperado. Verifique o console.";
-                });
+                  .then((response) =>
+                    response.json().then((data) => ({ status: response.status, data }))
+                  )
+                  .then(({ status: code, data }) => {
+                    checkoutStatus.innerHTML = `
+                      <strong>Status ${code}</strong>
+                      <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                  })
+                  .catch((error) => {
+                    console.error("Erro ao chamar o backend:", error);
+                    checkoutStatus.textContent = "Erro inesperado. Verifique o console.";
+                  });
+              },
+              onError: (error) => {
+                console.error("Erro ao montar o cardForm:", error);
+              },
             },
-            onError: (error) => {
-              console.error("Erro ao montar o cardForm:", error);
-            },
-          },
-        });
+          });
+          window[cardFormKey] = formInstance;
+          return formInstance;
+        };
+
+        let cardForm = null;
+        try {
+          cardForm = createCardForm();
+        } catch (error) {
+          console.warn("Falha ao instanciar o cardForm:", error);
+          updateBatchStatus("CardForm já estava montado; o formulário único pode não atualizar.");
+        }
 
         batchProcessBtn.addEventListener("click", handleBatch);
       }
