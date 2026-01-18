@@ -1,0 +1,8 @@
+Flask>=2.2.5
+gunicorn>=20.1.0
+requests>=2.28.0
+selenium>=4.10.0
+concurrent-log-handler>=0.9.20
+colorama>=0.4.6
+tqdm>=4.65.0
+python-dotenv>=1.0.0

@@ -1,0 +1,17 @@
+{
+  "gateway": null,
+  "config": {
+    "base_url": "",
+    "endpoints": [],
+    "headers": {},
+    "payload_templates": [],
+    "validation": {
+      "success_codes": [
+        200,
+        201
+      ],
+      "error_patterns": [],
+      "live_indicators": []
+    }
+  }
+}

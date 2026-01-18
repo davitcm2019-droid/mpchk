@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+  </head>
+  <body>
+    <main class="layout">
+      <header class="hero">
+        <h1>{{ title }}</h1>
+        <p>Checkout transparente pronto para Render com HTTPS automático.</p>
+      </header>
+
+      {% if missing_credentials %}
+      <section class="notice error">
+        <strong>Credenciais ausentes:</strong>
+        <span>{{ missing_credentials | join(", ") }}</span>
+        <p>Defina as variáveis de ambiente em Render antes de subir o serviço.</p>
+      </section>
+      {% endif %}
+
+      <section class="card-form-panel">
+        <form id="checkoutForm" class="card-form">
+          <div class="row">
+            <label for="cardholderName">Nome no cartão</label>
+            <input id="cardholderName" name="cardholderName" type="text" required />
+          </div>
+          <div class="row">
+            <label for="cardholderEmail">E-mail</label>
+            <input id="cardholderEmail" name="cardholderEmail" type="email" required />
+          </div>
+          <div class="row">
+            <label for="docType">Tipo de documento</label>
+            <input id="docType" name="docType" type="text" value="CPF" required />
+          </div>
+          <div class="row">
+            <label for="docNumber">Documento (CPF/CNPJ)</label>
+            <input id="docNumber" name="docNumber" type="text" required />
+          </div>
+          <div class="row">
+            <label for="cardNumber">Número do cartão</label>
+            <div id="mp-card-number"></div>
+          </div>
+          <div class="row">
+            <label for="cardExpirationMonth">Mês de expiração</label>
+            <div id="mp-card-expiration-month"></div>
+          </div>
+          <div class="row">
+            <label for="cardExpirationYear">Ano de expiração</label>
+            <div id="mp-card-expiration-year"></div>
+          </div>
+          <div class="row">
+            <label for="securityCode">CVV</label>
+            <div id="mp-security-code"></div>
+          </div>
+          <div class="row">
+            <label for="amount">Valor</label>
+            <input id="amount" name="transactionAmount" type="number" step="0.01" value="10.00" min="1" />
+          </div>
+          <div class="row">
+            <label for="installments">Parcelas</label>
+            <input id="installments" name="installments" type="number" min="1" max="12" value="1" />
+          </div>
+          <button type="submit">Pagar com Mercado Pago</button>
+        </form>
+        <div id="status" class="status" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
+    <script>
+      const publicKey = "{{ public_key | e }}";
+      const form = document.getElementById("checkoutForm");
+      const status = document.getElementById("status");
+
+      if (!publicKey) {
+        status.textContent =
+          "A chave pública não foi configurada. Verifique as variáveis de ambiente e recarregue.";
+      } else {
+        const mp = new MercadoPago(publicKey, { locale: "pt-BR" });
+
+        const cardForm = mp.cardForm({
+          amount: document.getElementById("amount").value || "1",
+          autoMount: true,
+          form: {
+            id: "checkoutForm",
+            cardholderName: {
+              id: "cardholderName",
+              placeholder: "Nome completo",
+            },
+            cardholderEmail: {
+              id: "cardholderEmail",
+              placeholder: "email@exemplo.com",
+            },
+            docType: {
+              id: "docType",
+              placeholder: "CPF",
+            },
+            docNumber: {
+              id: "docNumber",
+              placeholder: "00000000000",
+            },
+            cardNumber: {
+              id: "mp-card-number",
+            },
+            cardExpirationMonth: {
+              id: "mp-card-expiration-month",
+            },
+            cardExpirationYear: {
+              id: "mp-card-expiration-year",
+            },
+            securityCode: {
+              id: "mp-security-code",
+            },
+            installments: {
+              id: "installments",
+            },
+            transactionAmount: {
+              id: "amount",
+            },
+          },
+          callbacks: {
+            onSubmit: (event) => {
+              event.preventDefault();
+              const cardFormData = cardForm.getCardFormData();
+              const payload = {
+                ...cardFormData,
+                payer_email: cardFormData.cardholderEmail,
+                transaction_amount: Number(cardFormData.transactionAmount),
+              };
+
+              status.textContent = "Processando pagamento...";
+
+              fetch("/api/payments", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+              })
+                .then((response) => response.json().then((data) => ({ status: response.status, data })))
+                .then(({ status: code, data }) => {
+                  status.innerHTML = `
+                    <strong>Status ${code}</strong>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                  `;
+                })
+                .catch((error) => {
+                  console.error("Erro ao chamar o backend:", error);
+                  status.textContent = "Erro inesperado. Verifique o console.";
+                });
+            },
+            onError: (error) => {
+              console.error("Erro ao montar o cardForm:", error);
+            },
+          },
+        });
+      }
+    </script>
+  </body>
+</html>

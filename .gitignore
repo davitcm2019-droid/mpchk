@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+env/
+venv/
+results_*.json
+lives_*.txt
+*.log
