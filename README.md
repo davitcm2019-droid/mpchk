@@ -49,14 +49,14 @@ Este repositorio combina o sistema de verificacao de cartoes com um checkout tra
 ## Front-end e seguranca
 
 - O checkout usa apenas o SDK oficial `mercadopago.js`. Dados sensiveis jamais ficam no servidor, apenas o token criado pelo SDK.
-- O backend repassa o token, `transaction_amount`, `installments` e `payer_email` diretamente para a API oficial. Se voce precisar de campos extras (nome, documento, endereco), basta adaptar o template e o payload do `create_payment`.
+- O backend repassa o token, `transaction_amount`, `installments` e `payer_email` diretamente para a API oficial. Se voce precisar de campos extras (nome, documento, endereco), basta adaptar o template e o payload do `create_payment`. Quando a MP retorna um erro 4xx/5xx, a resposta completa (se houver JSON) aparece no painel e no log para auxiliar o debug.
 - O campo de valor default do form unico esta fixado em R$ 3,00, o mesmo valor cobrado em cada tentativa automatica da lista.
 
 ## Teste em lote de cartoes
 
 - Cole os cartoes no campo de lista usando o padrao `cardNumber|MM|YYYY|CVV`. Linhas vazias ou comentarios iniciados em `#` sao ignoradas.
-- O frontend gera nomes e CPFs validos automaticamente e dispara R$ 3,00 por cartao, exibindo os resultados no dashboard.
-- As respostas sao agrupadas em listas separadas para `Live`, `Die` e `CVV inválido`, com a mesma interface responsiva e explicacoes do status retornado pelo Mercado Pago.
+- O frontend gera nomes, CPFs e emails validos automaticamente e dispara R$ 3,00 por cartao, exibindo os resultados no dashboard.
+- As respostas sao agrupadas em listas separadas para `Live`, `Die` e `CVV inválido`, e a interface mostra o status detalhado retornado pelo Mercado Pago.
 - Use os cartoes de sandbox da documentacao para validar tudo antes de trocar pelas credenciais de producao.
 
 ## Proximos passos recomendados

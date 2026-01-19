@@ -86,11 +86,26 @@ def create_payment():
             timeout=15,
         )
         response.raise_for_status()
+        return jsonify(response.json()), response.status_code
+
     except requests.RequestException as err:
         logger.exception("Erro ao comunicar com a API do Mercado Pago")
-        return jsonify({"error": "request_error", "details": str(err)}), 502
+        status_code = getattr(err.response, "status_code", 502)
+        response_body = None
+        if err.response is not None:
+            try:
+                response_body = err.response.json()
+            except ValueError:
+                response_body = err.response.text
 
-    return jsonify(response.json()), response.status_code
+        error_payload = {
+            "error": "request_error",
+            "details": str(err),
+        }
+        if response_body:
+            error_payload["response_body"] = response_body
+
+        return jsonify(error_payload), status_code if status_code >= 400 else 502
 
 
 @app.route("/api/config", methods=["GET"])
