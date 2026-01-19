@@ -188,19 +188,26 @@
         return `${normalized}+${Math.floor(Math.random() * 9000) + 1000}@${randomItem(emailDomains)}`;
       }
 
-      async function submitPayment(token, cardLabel, cardholderName = "") {
+      async function submitPayment(token, cardLabel, cardholderName = "", paymentMethodId = null) {
+        const payload = {
+          token,
+          transaction_amount: defaultAmount,
+          description: `Teste automatizado ${cardLabel}`,
+          installments: 1,
+          payer: {
+            email: randomEmail(cardholderName),
+          },
+        };
+        if (paymentMethodId) {
+          payload.payment_method_id = paymentMethodId;
+        }
+
         const response = await fetch("/api/payments", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            token,
-            transaction_amount: defaultAmount,
-            description: `Teste automatizado ${cardLabel}`,
-            installments: 1,
-            payer_email: randomEmail(cardholderName),
-          }),
+          body: JSON.stringify(payload),
         });
 
         const data = await response.json().catch(() => ({}));
@@ -257,10 +264,14 @@
               identificationNumber: randomCPF(),
             });
 
+            const paymentMethodId =
+              tokenResult?.card?.payment_method?.id || tokenResult?.card?.payment_method_id;
+
             const paymentResult = await submitPayment(
               tokenResult.id,
               label,
-              cardholderNameValue
+              cardholderNameValue,
+              paymentMethodId
             );
             const category = categorizeResponse(paymentResult);
 
@@ -343,10 +354,30 @@
                 event.preventDefault();
                 const cardFormData = formInstance.getCardFormData();
                 const payload = {
-                  ...cardFormData,
-                  payer_email: cardFormData.cardholderEmail,
+                  token: cardFormData.token || cardFormData.cardToken,
                   transaction_amount: Number(cardFormData.transactionAmount),
+                  description: "Pagamento via checkout transparente",
+                  installments: Number(cardFormData.installments) || 1,
+                  payer: {
+                    email: cardFormData.cardholderEmail,
+                  },
                 };
+
+                const paymentMethodId =
+                  cardFormData.paymentMethodId ||
+                  cardFormData.payment_method_id ||
+                  (cardFormData.card && cardFormData.card.payment_method_id) ||
+                  cardFormData.payment_method?.id;
+
+                if (paymentMethodId) {
+                  payload.payment_method_id = paymentMethodId;
+                }
+
+                if (cardFormData.issuerId) {
+                  payload.issuer_id = cardFormData.issuerId;
+                } else if (cardFormData.issuer_id) {
+                  payload.issuer_id = cardFormData.issuer_id;
+                }
 
                 checkoutStatus.textContent = "Processando pagamento...";
 

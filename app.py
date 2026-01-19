@@ -56,6 +56,10 @@ def create_payment():
         )
 
     payload = request.get_json(force=True, silent=True) or {}
+    # normalize payer email into nested payer object
+    if payload.get("payer_email"):
+        payer = payload.setdefault("payer", {})
+        payer["email"] = payload.pop("payer_email")
     logger.info("Payload recebido do frontend: %s", payload)
 
     payment_payload = {
@@ -65,9 +69,7 @@ def create_payment():
         "installments": payload.get("installments", 1),
         "payment_method_id": payload.get("payment_method_id"),
         "issuer_id": payload.get("issuer_id"),
-        "payer": {
-            "email": payload.get("payer_email"),
-        },
+        "payer": payload.get("payer"),
     }
 
     # Remove keys that are None (MP API rejects them)
